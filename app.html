@@ -1,0 +1,33 @@
+<head>
+	<title>app</title>
+</head>
+
+
+<template name="layout">
+{{>loginButtons}}
+{{#if currentUser}}
+	{{>yield}}
+{{else}}
+	please log in
+{{/if}}
+</template>
+
+<template name="rooms">
+	<a class="btn btn-create-room">Create room</a>
+	{{#each rooms}}
+		<a href="{{pathFor route='room'}}">{{_id}}</a>
+	{{/each}}
+</template>
+
+
+<template name="room">
+<div class="room">
+<h1>Room {{_id}}</h1>
+{{>room_scene}}
+</div>
+</template>
+
+
+<template name="room_scene">
+<div class="canvas-container"></div>
+</template>
