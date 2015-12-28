@@ -1,6 +1,6 @@
 
 Router.configure({
-  layoutTemplate: 'layout'
+	layoutTemplate: 'layout'
 });
 if(Meteor.isServer)
 	Players = new Meteor.Collection("Players", {connection: null}); // in memory
@@ -132,12 +132,20 @@ if(Meteor.isClient) {
 
 		scene.add(new THREE.AmbientLight(0x505050));
 		let light = new THREE.SpotLight(0xffffff, 1.5);
-		light.position.set(100,500,200);
+		light.position.set(0,0,5);
 		light.castShadow = true;
 		scene.add(light);
 
-		camera.position.set(200,200,500);
-		controls.target.set(200,200,0);
+		var geometry = new THREE.PlaneGeometry( 500, 500, 32 );
+		var material = new THREE.MeshLambertMaterial( {color: 0xffff00, side: THREE.DoubleSide} );
+		var floor = new THREE.Mesh( geometry, material );
+		scene.add( floor );
+		camera.lookAt(new THREE.Vector3( 10, 0, 0 ));
+		//	floor.rotation.x = Math.PI/2;
+
+		camera.position.set(0,0,1);
+		window.camera = camera;
+		controls.target.set(0,0,0);
 		controls.update();
 
 		this.autorun(() => {
@@ -150,13 +158,12 @@ if(Meteor.isClient) {
 			renderer.setSize(width,height);
 		});
 		let sceneObjects = new Map;
-		let handle = this.data.room.others().observeChanges({
+		let handle = this.data.room.players().observeChanges({
 			added(id, fields) {
 				console.log("added", id, fields);
 				let player = ThreeObjectFactory.createPlayer();
 				scene.add(player);
 				sceneObjects.set(id, player);
-				
 			},
 			changed(id, fields) {
 				console.log("changed", id, fields);
@@ -171,7 +178,7 @@ if(Meteor.isClient) {
 					player.position.setZ(z);
 				}
 			},
-		
+
 			removed(id) {
 				console.log("removed", id);
 				let player = sceneObjects.get(id);
@@ -200,14 +207,14 @@ if(Meteor.isClient) {
 
 
 
-	ThreeObjectFactory = {
-		createPlayer() {
+ThreeObjectFactory = {
+	createPlayer() {
 
-	 	var geometry = new THREE.BoxGeometry( 200, 200, 200 );
-	 	return new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( { color: 0xff0000 } ) ) ;
+		var geometry = new THREE.BoxGeometry( 1, 1, 1);
+		return new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( { color: 0xff0000 } ) ) ;
 
-	 
 
-		}
+
 	}
+}
 }
