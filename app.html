@@ -22,7 +22,7 @@
 
 <template name="room">
 <div class="room">
-<h1>Room {{_id}}</h1>
+<h1>Room {{_id}} - Kills: {{room.me.kills}}</h1>
 {{>room_scene}}
 </div>
 </template>
@@ -30,4 +30,7 @@
 
 <template name="room_scene">
 <div class="canvas-container"></div>
+{{#if room.me.isDead}}
+<div class="dead-overlay"></div>
+{{/if}}
 </template>

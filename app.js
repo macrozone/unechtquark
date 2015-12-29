@@ -2,8 +2,10 @@
 Router.configure({
 	layoutTemplate: 'layout'
 });
-
-Players = new Meteor.Collection("Players");
+if(Meteor.isServer)
+	Players = new Meteor.Collection("Players",{connection:null});
+else
+	Players = new Meteor.Collection("Players");
 
 Players.helpers({
 	isMe(){
@@ -11,6 +13,12 @@ Players.helpers({
 	},
 	currentRoom() {
 		return Rooms.findOne(this.roomId);
+	},
+	positionV3() {
+		return new THREE.Vector3(this.x, this.y, this.z);
+	},
+	directionV3() {
+		return new THREE.Vector3(this.lookX, this.lookY, this.lookZ);
 	}
 });
 Rooms = new Meteor.Collection("Rooms");
@@ -23,8 +31,8 @@ Rooms.helpers({
 	me(){
 		return Players.findOne({roomId: this._id, userId: Meteor.userId()});
 	},
-	others(){
-		return Players.find({roomId: this._id, userId: {$ne: Meteor.userId()}});
+	others(userId = Meteor.userId()){
+		return Players.find({roomId: this._id, userId: {$ne: userId}});
 	},
 	engine(){
 		if(! RoomEngines.has(this._id)) {
@@ -32,7 +40,8 @@ Rooms.helpers({
 		}
 		return RoomEngines.get(this._id);
 	},
-	killEngine(){
+	kill(){
+		this.engine().stop();
 		RoomEngines.delete(this._id);
 	}
 });
@@ -49,10 +58,11 @@ if(Meteor.isServer) {
 			Players.remove({userId: this.userId});
 			if(Players.find({roomId}).count() === 0) {
 				room.engine().stop();
+				room.engine().kill();
 			}
 		});
 		if(room) {
-			Players.insert({roomId, userId: this.userId, x:0,y:0,z:0});
+			Players.insert({roomId, userId: this.userId, x:0,y:1,z:0, kills: 0});
 
 		}
 
@@ -82,40 +92,7 @@ Meteor.methods({
 })
 
 
-let walkDelta = 0.1;
 
-
-Meteor.methods({
-	["Player.forward"](forward) {
-
-		let player = Players.findOne({userId:this.userId});
-		Players.update({_id: player._id}, {$set: {forward}});
-	},
-	["Player.backward"](backward) {
-		let player = Players.findOne({userId:this.userId});
-		Players.update({_id: player._id}, {$set: {backward}});
-	},
-	["Player.left"](left) {
-		let player = Players.findOne({userId:this.userId});
-		Players.update({_id: player._id}, {$set: {left}});
-	},
-	["Player.right"](right) {
-		let player = Players.findOne({userId:this.userId});
-		Players.update({_id: player._id}, {$set: {right}});
-	},
-	["Player.lookX"](lookX) {
-		let player = Players.findOne({userId:this.userId});
-		Players.update({_id: player._id}, {$set: {lookX}});
-	},
-	["Player.lookY"](lookY) {
-		let player = Players.findOne({userId:this.userId});
-		Players.update({_id: player._id}, {$set: {lookY}});
-	},
-	["Player.lookZ"](lookZ) {
-		let player = Players.findOne({userId:this.userId});
-		Players.update({_id: player._id}, {$set: {lookZ}});
-	}
-})
 
 Router.route("/room/:_id", {
 	name: "room",
@@ -165,7 +142,10 @@ if(Meteor.isClient) {
 		this.playerLookDirectionX = new ReactiveVar(0);
 		this.playerLookDirectionY = new ReactiveVar(0);
 		this.playerLookDirectionZ = new ReactiveVar(0);
-		let scene = new THREE.Scene();
+		let engine = this.data.room.engine();
+		let scene = engine.scene;
+
+
 		let raycaster = new THREE.Raycaster();
 		let mouse = new THREE.Vector2();
 		let $container = this.$(".canvas-container");
@@ -174,9 +154,10 @@ if(Meteor.isClient) {
 
 		let camera = new THREE.PerspectiveCamera(75, $container.width()/$container.height(), 0.1, 10000);
 		let controls = new THREE.PointerLockControls( camera);
-		window.controls = controls;
 		controls.enabled = true;
-		scene.add(controls.getObject());
+		window.controls = controls;
+		engine.setClient({camera, controls});
+		
 
 		renderer.setClearColor( 0xffffff, 1 );
 		renderer.setPixelRatio(window.devicePixelRatio);
@@ -222,6 +203,7 @@ if(Meteor.isClient) {
 
 
 		this.autorun(() => Meteor.call("Player.forward", Keypress.is(Keypress.Keys.e)));
+		this.autorun(() => {if(Keypress.is(Keypress.Keys.x)) Meteor.call("Player.shoot")});
 		this.autorun(() => Meteor.call("Player.backward", Keypress.is(Keypress.Keys.d)));
 		this.autorun(() => Meteor.call("Player.left", Keypress.is(Keypress.Keys.s)));
 		this.autorun(() => Meteor.call("Player.right", Keypress.is(Keypress.Keys.f)));
@@ -229,86 +211,26 @@ if(Meteor.isClient) {
 		this.autorun(() => Meteor.call("Player.lookY", this.playerLookDirectionY.get()));
 		this.autorun(() => Meteor.call("Player.lookZ", this.playerLookDirectionZ.get()));
 
-		let sceneObjects = new Map;
-		function setPositionFields(position, fields) {
-			let pos = {};
-			if(_.has(fields, "x")) {
-				pos.x = fields.x;
-			}
-			if(_.has(fields, "y")) {
-				pos.y = fields.y;
-			}
-			if(_.has(fields, "z")) {
-				pos.z = fields.z;
-			}
+		
+		// handle player camera
 
-			let tween = new TWEEN.Tween(position);
-			tween.to(pos, 100);
-			//tween.easing(TWEEN.Easing.Linear);
-			tween.start()
-		}
-		let yAxis = new THREE.Vector3(0,1,0);
-		function setRotationFields(rotation, fields) {
-			let pos = {};
-			
-			if(_.has(fields, "lookX")) {
-				pos.x = fields.lookX;
-			}
-			if(_.has(fields, "lookZ")) {
-				pos.y = fields.lookZ;
-			}
-			console.log(pos);
-			let tween = new TWEEN.Tween(rotation);
-			tween.to(pos, 100);
-			//tween.easing(TWEEN.Easing.Linear);
-			tween.start()
-		}
-
-		// handle player
-
-		this.autorun(() => {
-			let {x,y,z} = this.data.room.me();
-			setPositionFields(controls.getObject().position,{x,y:y+1,z});
-		});
 		let lookDirectionVector = new THREE.Vector3;
 		let cameraHandle = Meteor.setInterval(() => {
 			controls.getDirection(lookDirectionVector);
 			this.playerLookDirectionX.set(lookDirectionVector.x);
 			this.playerLookDirectionY.set(lookDirectionVector.y);
 			this.playerLookDirectionZ.set(lookDirectionVector.z);
-		},100)
+		},50);
+
 		this.view.onViewDestroyed(function(){
 			Meteor.clearInterval(cameraHandle)
 		});
 
-		// handle others
-		let handle = this.data.room.others().observeChanges({
-			added(id, fields) {
-				let player = ThreeObjectFactory.createPlayer();
-				setPositionFields(player.position, fields);
-				setRotationFields(player.rotation, fields);
-				
-				scene.add(player);
-				sceneObjects.set(id, player);
-			},
-			changed(id, fields) {
-				let player = sceneObjects.get(id);
-
-				setPositionFields(player.position, fields);
-				setRotationFields(player.rotation, fields);
-
-			},
-
-			removed(id) {
-				console.log("removed", id);
-				let player = sceneObjects.get(id);
-				scene.remove(player);
-				sceneObjects.delete(id);
-			}
-		});
+		engine.start();
+		
 
 		this.view.onViewDestroyed(function(){
-			handle.stop();
+			engine.stop();
 		});
 
 		// main render loop
@@ -330,19 +252,10 @@ if(Meteor.isClient) {
 Template.room_scene.events({
 	["click"](event, template){
 		template.$(".canvas-container").get(0).requestPointerLock();
+		Meteor.call("Player.shoot");
 	}
 })
 
 
 
-ThreeObjectFactory = {
-	createPlayer() {
-
-		var geometry = new THREE.BoxGeometry( 1, 1, 1);
-		return new THREE.Mesh( geometry, new THREE.MeshLambertMaterial( { color: 0xff0000 } ) ) ;
-
-
-
-	}
-}
 }
