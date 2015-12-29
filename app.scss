@@ -33,4 +33,17 @@
 		background-size: 100%;
 		background-image: url("blood.png");
 	}
+
+	.room_raking {
+		position: absolute;
+		top: 0px;
+		right: 0px;
+		width: auto;
+		z-index:100;
+		background-color: rgba(255,255,255,0.5);
+
+		tr.me {
+			color: red;
+		}
+	}
 }

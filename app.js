@@ -40,7 +40,7 @@ Rooms.helpers({
 		}
 		return RoomEngines.get(this._id);
 	},
-	kill(){
+	killEngine(){
 		this.engine().stop();
 		RoomEngines.delete(this._id);
 	}
@@ -58,11 +58,13 @@ if(Meteor.isServer) {
 			Players.remove({userId: this.userId});
 			if(Players.find({roomId}).count() === 0) {
 				room.engine().stop();
-				room.engine().kill();
+				room.killEngine();
 			}
 		});
 		if(room) {
-			Players.insert({roomId, userId: this.userId, x:0,y:1,z:0, kills: 0});
+			let x = Math.random()*100-50;
+			let z = Math.random()*100-50;
+			Players.insert({roomId, userId: this.userId, x:x,y:1,z:z, kills: [], killedBy: []});
 
 		}
 
@@ -202,7 +204,9 @@ if(Meteor.isClient) {
 
 
 
-		this.autorun(() => Meteor.call("Player.forward", Keypress.is(Keypress.Keys.e)));
+		this.autorun(() => {
+			Meteor.call("Player.forward", Keypress.is(Keypress.Keys.e))}
+			);
 		this.autorun(() => {if(Keypress.is(Keypress.Keys.x)) Meteor.call("Player.shoot")});
 		this.autorun(() => Meteor.call("Player.backward", Keypress.is(Keypress.Keys.d)));
 		this.autorun(() => Meteor.call("Player.left", Keypress.is(Keypress.Keys.s)));
@@ -239,7 +243,7 @@ if(Meteor.isClient) {
 			if(!this.view.isDestroyed) {
 				requestAnimationFrame(render);
 				renderer.render(scene, camera);
-				raycaster.setFromCamera(mouse, camera);
+				
 				
 				TWEEN.update(time);
 			}
@@ -249,12 +253,18 @@ if(Meteor.isClient) {
 	});	
 
 
-Template.room_scene.events({
-	["click"](event, template){
-		template.$(".canvas-container").get(0).requestPointerLock();
-		Meteor.call("Player.shoot");
-	}
-})
+	Template.room_scene.events({
+		["click"](event, template){
+			template.$(".canvas-container").get(0).requestPointerLock();
+			Meteor.call("Player.shoot");
+		}
+	})
+
+	Template.room_raking.helpers({
+		ranking() {
+			return _.sortBy(this.room.players().fetch(), (player) => -player.kills.length);
+		}
+	});
 
 
 

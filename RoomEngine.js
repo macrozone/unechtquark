@@ -1,5 +1,7 @@
-WALK_DELTA = 0.3;
-TICK_INTERVAL = 50;
+WALK_DELTA = 0.6;
+TICK_INTERVAL = 100;
+SIMULATE_LOCALLY = false;
+FAKE_DELAY = 0;
 
 // global server tween update
 if(Meteor.isServer) {
@@ -112,6 +114,19 @@ RoomEngine = class {
 			}
 		});
 
+		if(Meteor.isClient) {
+			this.clientObserveHandle = Tracker.autorun(() => {
+				let me = this.room().me();
+				
+				if(me) {
+					let {x,y,z} = me;
+					this.setPositionFields(this.client.controls.getObject().position,{x,y,z});
+				}
+
+			});
+
+
+		}
 
 	}
 
@@ -122,7 +137,7 @@ RoomEngine = class {
 	}
 
 	shoot(player) {
-
+		
 		this.raycaster.set(player.positionV3(), player.directionV3());
 		let players = this.room().others(player.userId).map((player) => {
 			let player3d = this.sceneObjects.get(player._id);
@@ -130,13 +145,30 @@ RoomEngine = class {
 			return player3d;
 		});
 		let hit = _.first(this.raycaster.intersectObjects(players));
+		
+
+		var material = new THREE.LineBasicMaterial({
+			color: hit ? 0xff0000 : 0x00ffff,
+			linewidth: 10
+		});
+		var geometry = new THREE.Geometry();
+		let rayStart = new THREE.Vector3(player.x, player.y -0.1, player.z);
+		geometry.vertices.push(rayStart, this.raycaster.ray.at(100));
+		let ray = new THREE.Line( geometry, material );
+		
+		this.scene.add(ray);
+		Meteor.isClient && window.setTimeout(() => {
+			this.scene.remove(ray);
+		},2000);
+
 
 		if(hit) {
+
 			let hitPlayer = Players.findOne(hit.object.playerId);
 			if(!hitPlayer.isDead) {
-				this.kill(hitPlayer._id);
-				Players.update(player._id, {$inc: {kills: 1}});
-
+				Players.update(player._id, {$push: {kills: hitPlayer._id}});
+				Players.update(hitPlayer._id, {$set: {isDead: true}, $push: {killedBy: player._id}});
+				this.resurrect(hitPlayer._id);
 				console.log("hit!");
 			}
 			else
@@ -146,11 +178,13 @@ RoomEngine = class {
 			
 		}
 	}
-	kill(playerId) {
-		Players.update(playerId,{$set: {isDead: true}})
+	resurrect(playerId) {
+		
 		if(Meteor.isServer) {
 			Meteor.setTimeout(() => {
-				Players.update(playerId, {$set: {isDead: false}});
+				let x = Math.random()*100-50;
+				let z = Math.random()*100-50;
+				Players.update(playerId, {$set: {isDead: false, x, z}});
 			}, 5000);
 		}
 	}
@@ -166,15 +200,13 @@ RoomEngine = class {
 
 	tick() {
 
-
+		
 		this.room().players().forEach((player) => {
 			let {x,y,z,lookX, lookY, lookZ} = player;
-
 
 			if(player.forward){
 				z += lookZ*WALK_DELTA;
 				x += lookX*WALK_DELTA;
-
 			}
 			if(player.backward){
 				z -= lookZ*WALK_DELTA;
@@ -191,12 +223,12 @@ RoomEngine = class {
 
 			if(Meteor.isServer){
 				Players.update(player._id, {$set: {x,y,z}});
-			}else{
+			} else if(SIMULATE_LOCALLY) {
 				//Players.update not allowed on the client, just update the scene objects 
 				if(Meteor.isClient && player.isMe()) {
 					this.clientSetPosition({x,y,z});
 				}
-				else{
+				else {
 					let player3d = this.sceneObjects.get(player._id);
 					this.setPositionFields(player3d.position, {x,y,z});
 				}
@@ -218,42 +250,55 @@ RoomEngine = class {
 
 Meteor.methods({
 	["Player.forward"](forward) {
-
-		let player = Players.findOne({userId:this.userId});
+		if(Meteor.isServer && FAKE_DELAY)
+			Meteor._sleepForMs(FAKE_DELAY);
+		let player = Players.findOne({userId:this.userId}, {fields:{_id: true}});
 		if(player)
 			Players.update({_id: player._id}, {$set: {forward}});
 	},
 	["Player.backward"](backward) {
-		let player = Players.findOne({userId:this.userId});
+
+		if(Meteor.isServer && FAKE_DELAY)
+			Meteor._sleepForMs(FAKE_DELAY);
+		let player = Players.findOne({userId:this.userId}, {fields:{_id: true}});
 		if(player)
 			Players.update({_id: player._id}, {$set: {backward}});
 	},
 	["Player.left"](left) {
-		let player = Players.findOne({userId:this.userId});
+		if(Meteor.isServer && FAKE_DELAY)
+			Meteor._sleepForMs(FAKE_DELAY);
+		let player = Players.findOne({userId:this.userId}, {fields:{_id: true}});
 		if(player)
 			Players.update({_id: player._id}, {$set: {left}});
 	},
 	["Player.right"](right) {
-		let player = Players.findOne({userId:this.userId});
+		if(Meteor.isServer && FAKE_DELAY)
+			Meteor._sleepForMs(FAKE_DELAY);
+		let player = Players.findOne({userId:this.userId}, {fields:{_id: true}});
 		if(player)
 			Players.update({_id: player._id}, {$set: {right}});
 	},
 	["Player.lookX"](lookX) {
-		let player = Players.findOne({userId:this.userId});
+		
+		let player = Players.findOne({userId:this.userId}, {fields:{_id: true}});
 		if(player)
 			Players.update({_id: player._id}, {$set: {lookX}});
 	},
 	["Player.lookY"](lookY) {
-		let player = Players.findOne({userId:this.userId});
+		
+		let player = Players.findOne({userId:this.userId}, {fields:{_id: true}});
 		if(player)
 			Players.update({_id: player._id}, {$set: {lookY}});
 	},
 	["Player.lookZ"](lookZ) {
-		let player = Players.findOne({userId:this.userId});
+		
+		let player = Players.findOne({userId:this.userId}, {fields:{_id: true}});
 		if(player)
 			Players.update({_id: player._id}, {$set: {lookZ}});
 	},
 	["Player.shoot"]() {
+		if(Meteor.isServer && FAKE_DELAY)
+			Meteor._sleepForMs(FAKE_DELAY);
 		let player = Players.findOne({userId:this.userId});
 		player.currentRoom().engine().shoot(player);
 	},

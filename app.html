@@ -4,33 +4,64 @@
 
 
 <template name="layout">
-{{>loginButtons}}
-{{#if currentUser}}
+	{{>loginButtons}}
+	{{#if currentUser}}
 	{{>yield}}
-{{else}}
+	{{else}}
 	please log in
-{{/if}}
+	{{/if}}
 </template>
 
 <template name="rooms">
 	<a class="btn btn-create-room">Create room</a>
 	{{#each rooms}}
-		<a href="{{pathFor route='room'}}">{{_id}}</a>
+	<a href="{{pathFor route='room'}}">{{_id}}</a>
 	{{/each}}
 </template>
 
 
 <template name="room">
-<div class="room">
-<h1>Room {{_id}} - Kills: {{room.me.kills}}</h1>
-{{>room_scene}}
-</div>
+	<div class="room">
+		<h1>Room {{_id}}</h1>
+		{{>room_raking}}
+		{{>room_scene}}
+	</div>
 </template>
 
 
 <template name="room_scene">
-<div class="canvas-container"></div>
-{{#if room.me.isDead}}
-<div class="dead-overlay"></div>
-{{/if}}
+	<div class="canvas-container"></div>
+	{{#if room.me.isDead}}
+	<div class="dead-overlay"></div>
+	{{/if}}
+</template>
+
+
+<template name="room_raking">
+	<table class="room_raking table">
+		<thead>
+			<tr>
+				<th>Player</th>
+				<th>Kills</th>
+				<th>Deaths</th>
+					<th>Position</th>
+			</tr>
+		</thead>
+		<tbody>
+			{{#each ranking}}
+			<tr class="{{#if isMe}}me{{/if}}">
+				<td>
+					{{_id}}
+				</td>
+				<td>
+					{{kills.length}}
+				</td>
+				<td>
+					{{killedBy.length}}
+				</td>
+				<td>{{x.toFixed 2}}, {{z.toFixed 2}}, {{y.toFixed 2}}</td>
+			</tr>
+			{{/each}}
+		</tbody>
+		</table>
 </template>
