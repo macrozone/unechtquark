@@ -247,6 +247,22 @@ if(Meteor.isClient) {
 			//tween.easing(TWEEN.Easing.Linear);
 			tween.start()
 		}
+		let yAxis = new THREE.Vector3(0,1,0);
+		function setRotationFields(rotation, fields) {
+			let pos = {};
+			
+			if(_.has(fields, "lookX")) {
+				pos.x = fields.lookX;
+			}
+			if(_.has(fields, "lookZ")) {
+				pos.y = fields.lookZ;
+			}
+			console.log(pos);
+			let tween = new TWEEN.Tween(rotation);
+			tween.to(pos, 100);
+			//tween.easing(TWEEN.Easing.Linear);
+			tween.start()
+		}
 
 		// handle player
 
@@ -270,6 +286,8 @@ if(Meteor.isClient) {
 			added(id, fields) {
 				let player = ThreeObjectFactory.createPlayer();
 				setPositionFields(player.position, fields);
+				setRotationFields(player.rotation, fields);
+				
 				scene.add(player);
 				sceneObjects.set(id, player);
 			},
@@ -277,7 +295,7 @@ if(Meteor.isClient) {
 				let player = sceneObjects.get(id);
 
 				setPositionFields(player.position, fields);
-
+				setRotationFields(player.rotation, fields);
 
 			},
 
