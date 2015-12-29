@@ -1,7 +1,7 @@
 WALK_DELTA = 0.6;
 TICK_INTERVAL = 100;
-SIMULATE_LOCALLY = false;
-FAKE_DELAY = 0;
+SIMULATE_LOCALLY = true;
+FAKE_DELAY = false;
 
 // global server tween update
 if(Meteor.isServer) {
@@ -23,7 +23,6 @@ RoomEngine = class {
 			throw new Meteor.Error("cannot add two clients");
 		}
 		this.client = client;
-		
 		this.client.controls.enabled = true;
 		this.scene.add(this.client.controls.getObject());
 	}
@@ -104,6 +103,14 @@ RoomEngine = class {
 				else {
 					player.material.opacity = 1;
 				}
+
+				if(fields.lastShot)
+				{
+
+		
+					if(Meteor.isClient) 
+						engine.drawShoot(player.position, fields.lastShot.target, fields.lastShot.hasHit);
+				}
 			},
 
 			removed(id) {
@@ -114,15 +121,13 @@ RoomEngine = class {
 			}
 		});
 
-		if(Meteor.isClient) {
+		if(Meteor.isClient && !SIMULATE_LOCALLY) {
 			this.clientObserveHandle = Tracker.autorun(() => {
 				let me = this.room().me();
-				
 				if(me) {
 					let {x,y,z} = me;
 					this.setPositionFields(this.client.controls.getObject().position,{x,y,z});
 				}
-
 			});
 
 
@@ -136,6 +141,30 @@ RoomEngine = class {
 		this.setPositionFields(this.client.controls.getObject().position,{x,y,z});
 	}
 
+
+	drawShoot(rayStart, target, hit = false){
+		
+		var material = new THREE.LineBasicMaterial({
+			color: hit ? 0xff0000 : 0x00ffff,
+			linewidth: 10,
+			transparent: true
+		});
+		var geometry = new THREE.Geometry();
+		
+		geometry.vertices.push(
+			new THREE.Vector3(rayStart.x, rayStart.y, rayStart.z), 
+			new THREE.Vector3(target.x, target.y, target.z));
+		let ray = new THREE.Line( geometry, material );
+		
+		this.scene.add(ray);
+		
+		let tween = new TWEEN.Tween(ray.material);
+		tween.to({opacity:0}, 1000);
+		tween.easing(TWEEN.Easing.Circular.InOut);
+		tween.start()
+		tween.onComplete(()=> this.scene.remove(ray));
+	}
+
 	shoot(player) {
 		
 		this.raycaster.set(player.positionV3(), player.directionV3());
@@ -146,21 +175,13 @@ RoomEngine = class {
 		});
 		let hit = _.first(this.raycaster.intersectObjects(players));
 		
-
-		var material = new THREE.LineBasicMaterial({
-			color: hit ? 0xff0000 : 0x00ffff,
-			linewidth: 10
-		});
-		var geometry = new THREE.Geometry();
-		let rayStart = new THREE.Vector3(player.x, player.y -0.1, player.z);
-		geometry.vertices.push(rayStart, this.raycaster.ray.at(100));
-		let ray = new THREE.Line( geometry, material );
 		
-		this.scene.add(ray);
-		Meteor.isClient && window.setTimeout(() => {
-			this.scene.remove(ray);
-		},2000);
-
+		let rayStart = {x: player.x, y: player.y -0.1, z: player.z};
+		let target = this.raycaster.ray.at(500);
+		if(Meteor.isClient) 
+			this.drawShoot(rayStart, target, hit);
+		
+		Players.update(player._id, {$set: {lastShot: {target,tst: new Date(), hasHit: hit && true }}});
 
 		if(hit) {
 
